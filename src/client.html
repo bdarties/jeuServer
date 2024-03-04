@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Socket.io</title>
+  </head>
+
+  <body>
+    <h1>Communication avec socket.io !</h1>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var sockVersServeur = io.connect();
+
+      function selectPerso(rep) {
+        if (rep == "1") {
+          currentPlayer = perso1;
+          opponentPlayer = perso2;
+        } else {
+          currentPlayer = perso2;
+          opponentPlayer = perso1;
+        }
+        sockVersServeur.emit("selectPerso", rep);
+        sockVersServeur.on("ack", function (message) {
+          console.log("ack " + message);
+        });
+        // mouvement de l'ennemi
+        sockVersServeur.on("mouvement", function (message) {
+          if (message.action == "left") {
+            opponentPlayer.setVelocityX(-160);
+            opponentPlayer.anims.play("left", true);
+          }
+          if (message.action == "right") {
+            opponentPlayer.setVelocityX(160);
+            opponentPlayer.anims.play("right", true);
+          }
+          if (message.action == "turn") {
+            opponentPlayer.setVelocityX(0);
+            opponentPlayer.anims.play("turn");
+          }
+          if (message.action == "jump") {
+            opponentPlayer.setVelocityY(-330);
+          }
+          if (message.action == "position") {
+            opponentPlayer.x = message.x;
+            opponentPlayer.y = message.y;
+          }
+        });
+      }
+
+      function envoiPositionCourante() {
+        sockVersServeur.emit("mouvement", {
+          action: "position",
+          x: currentPlayer.x,
+          y: currentPlayer.y
+        });
+      }
+    </script>
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Ajouter plusieurs niveau à un jeu - Partie 1</title>
+        <script src="//cdn.jsdelivr.net/npm/phaser@3.50.0/dist/phaser.js"></script>
+        <style type="text/css">
+          body {
+            margin: 0;
+          }
+        </style>
+      </head>
+      <body>
+        <p>- Selectionne ton joueur</p>
+        <button onclick="selectPerso('1');">Joueur 1</button>
+        <button onclick="selectPerso('2');">Joueur 2</button>
+        <p id="zone_texte_final"></p>
+
+        <script type="text/javascript">
+          // creation d'une fonction envoyant la reponse
+          var config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+              default: "arcade",
+              arcade: {
+                gravity: { y: 300 },
+                debug: false
+              }
+            },
+            scene: {
+              preload: preload,
+              create: create,
+              update: update
+            }
+          };
+
+          var game = new Phaser.Game(config);
+
+          var perso1;
+          var perso2;
+          var currentPlayer;
+          var opponentPlayer;
+          var stop = false;
+          var platforms;
+          var cursors;
+
+          function preload() {
+            this.load.image("sky", "assets/sky.png");
+            this.load.image("ground", "assets/platform.png");
+            this.load.image("star", "assets/star.png");
+            this.load.image("bomb", "assets/bomb.png");
+            this.load.spritesheet("dude", "assets/dude.png", {
+              frameWidth: 32,
+              frameHeight: 48
+            });
+          }
+
+          function create() {
+            this.add.image(400, 300, "sky");
+            platforms = this.physics.add.staticGroup();
+            platforms.create(400, 568, "ground").setScale(2).refreshBody();
+            platforms.create(600, 400, "ground");
+            platforms.create(50, 250, "ground");
+            platforms.create(750, 220, "ground");
+
+            // creation du joueur 1 (gauche)
+            perso1 = this.physics.add.sprite(100, 450, "dude");
+            perso1.setBounce(0.3);
+            perso1.setCollideWorldBounds(true);
+            this.physics.add.collider(perso1, platforms);
+
+            // creation du joueur 1 (gauche)
+            perso2 = this.physics.add.sprite(200, 450, "dude");
+            perso2.setBounce(0.3);
+            perso2.setTint(0x00ffff);
+            perso2.setCollideWorldBounds(true);
+            this.physics.add.collider(perso2, platforms);
+
+            // initialisation par défaut :
+            currentPlayer = perso1;
+            this.anims.create({
+              key: "left",
+              frames: this.anims.generateFrameNumbers("dude", {
+                start: 0,
+                end: 3
+              }),
+              frameRate: 10,
+              repeat: -1
+            });
+
+            this.anims.create({
+              key: "turn",
+              frames: [{ key: "dude", frame: 4 }],
+              frameRate: 20
+            });
+
+            this.anims.create({
+              key: "right",
+              frames: this.anims.generateFrameNumbers("dude", {
+                start: 5,
+                end: 8
+              }),
+              frameRate: 10,
+              repeat: -1
+            });
+
+            cursors = this.input.keyboard.createCursorKeys();
+            perso1.anims.play("turn");
+            perso2.anims.play("turn");
+
+            var timerMAJ = this.time.addEvent({
+              delay: 3000,
+              callback: envoiPositionCourante,
+              callbackScope: this,
+              loop: true
+            });
+          }
+
+          function update() {
+            // mouvement de currentPlayer
+            if (cursors.left.isDown) {
+              sockVersServeur.emit("mouvement", {
+                action: "left",
+                x: currentPlayer.x,
+                y: currentPlayer.y
+              });
+              currentPlayer.setVelocityX(-160);
+              currentPlayer.anims.play("left", true);
+              stop = false;
+            } else if (cursors.right.isDown) {
+              sockVersServeur.emit("mouvement", {
+                action: "right",
+                x: currentPlayer.x,
+                y: currentPlayer.y
+              });
+              currentPlayer.setVelocityX(160);
+              currentPlayer.anims.play("right", true);
+              stop = false;
+            } else {
+              if (stop == false) {
+                sockVersServeur.emit("mouvement", {
+                  action: "turn",
+                  x: currentPlayer.x,
+                  y: currentPlayer.y
+                });
+                currentPlayer.setVelocityX(0);
+                currentPlayer.anims.play("turn");
+                stop = true;
+              }
+            }
+            if (cursors.up.isDown && currentPlayer.body.touching.down) {
+              sockVersServeur.emit("mouvement", {
+                action: "jump",
+                x: currentPlayer.x,
+                y: currentPlayer.y
+              });
+              currentPlayer.setVelocityY(-330);
+            }
+          }
+        </script>
+      </body>
+    </html>
+  </body>
+</html>

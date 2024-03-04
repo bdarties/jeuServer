@@ -1,0 +1,34 @@
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Socket.io</title>
+  </head>
+
+  <body>
+    <h1>Communication avec socket.io !</h1>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+      var sockVersServeur = io.connect();
+      sockVersServeur.on('theGame', function (message) {
+
+       // document.innerHTML = message; 
+       document.getElementById("zone_texte_final").innerHTML = message;
+      }
+      );
+
+      // creation d'une fonction envoyant la reponse
+      function envoiReponse(rep) {
+          sockVersServeur.emit('selectPlayer', rep);
+      }
+  </script>
+
+  <P>- Connais-tu l'histoire de Darth Plagueis le Sage ?</P>
+  <BUTTON onclick="envoiReponse('1');">OUI</BUTTON>
+  <BUTTON onclick="envoiReponse('2');">NON</BUTTON>
+  <p id="zone_texte_final"></p>
+
+</html>
